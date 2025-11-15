@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>座位规则编辑器</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3B82F6',
+                        secondary: '#10B981',
+                        danger: '#EF4444',
+                        dark: '#1F2937',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body class="bg-gray-50 min-h-screen py-8 px-4 md:px-8">
+    <!-- 密码验证界面 -->
+    <div id="passwordScreen" class="max-w-md mx-auto bg-white rounded-xl shadow-2xl p-8">
+        <h1 class="text-2xl font-bold text-center text-dark mb-6">规则编辑器</h1>
+        <p class="text-gray-600 mb-6 text-center">请输入密码以访问</p>
+        
+        <div class="mb-6">
+            <label for="password" class="block text-gray-700 mb-2">密码</label>
+            <input type="password" id="password" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary" placeholder="请输入密码">
+        </div>
+        
+        <button id="loginBtn" class="w-full bg-primary hover:bg-primary/90 text-white py-3 rounded-lg btn-effect font-medium">
+            登录
+        </button>
+        
+        <p id="errorMessage" class="text-danger text-center mt-4 hidden">密码错误，请重试</p>
+    </div>
+
+    <!-- 主内容区域（初始隐藏） -->
+    <div id="mainContent" class="max-w-4xl mx-auto hidden">
+        <header class="text-center mb-8">
+            <h1 class="text-[clamp(1.8rem,4vw,2.5rem)] font-bold text-dark mb-2">座位规则编辑器</h1>
+            <p class="text-gray-600">创建和管理座位安排规则，导出后可导入到座位安排程序中</p>
+        </header>
+
+        <main>
+            <!-- 学生姓名管理 -->
+            <div class="card">
+                <h2 class="text-xl font-semibold mb-4 flex items-center">
+                    <i class="fa fa-users text-primary mr-2"></i> 学生姓名管理
+                </h2>
+                <p class="text-gray-600 mb-4">请输入所有学生姓名（每行一个），用于规则设置时选择</p>
+                <textarea id="nameList" class="w-full h-40 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary resize-none mb-4" placeholder="输入学生姓名，每行一个..."></textarea>
+                <button id="loadNamesBtn" class="bg-secondary hover:bg-secondary/90 text-white px-4 py-2 rounded-lg btn-effect flex items-center gap-2 text-base">
+                    <i class="fa fa-save"></i> 保存学生名单
+                </button>
+            </div>
+
+            <!-- 行限制设置 -->
+            <div class="card">
+                <h2 class="text-xl font-semibold mb-4 flex items-center">
+                    <i class="fa fa-th-list text-primary mr-2"></i> 行限制设置
+                </h2>
+                <p class="text-gray-600 mb-4">指定学生只能坐在特定的行</p>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <label class="block text-gray-700 mb-2">选择学生</label>
+                        <select id="studentForRowRestriction" class="w-full p-2 border border-gray-300 rounded-lg">
+                            <option value="">-- 选择学生 --</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-gray-700 mb-2">允许的行（可多选，按住Ctrl键）</label>
+                        <select id="allowedRows" class="w-full p-2 border border-gray-300 rounded-lg" multiple size="3">
+                            <option value="0">第1行</option>
+                            <option value="1">第2行</option>
+                            <option value="2">第3行</option>
+                            <option value="3">第4行</option>
+                            <option value="4">第5行</option>
+                            <option value="5">第6行</option>
+                            <option value="6">第7行</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <button id="addRowRestriction" class="bg-secondary hover:bg-secondary/90 text-white px-4 py-2 rounded-lg btn-effect flex items-center gap-2 text-base mb-4">
+                    <i class="fa fa-plus"></i> 添加行限制
+                </button>
+                
+                <div id="rowRestrictionsList" class="p-3 bg-gray-50 rounded-lg max-h-40 overflow-y-auto">
+                    <p class="text-gray-500 italic">暂无行限制</p>
+                </div>
+            </div>
+
+            <!-- 相邻限制设置 -->
+            <div class="card">
+                <h2 class="text-xl font-semibold mb-4 flex items-center">
+                    <i class="fa fa-ban text-primary mr-2"></i> 相邻限制设置
+                </h2>
+                <p class="text-gray-600 mb-4">指定哪些学生不能坐在彼此相邻的位置（左右）</p>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <label class="block text-gray-700 mb-2">学生A</label>
+                        <select id="studentA" class="w-full p-2 border border-gray-300 rounded-lg">
+                            <option value="">-- 选择学生 --</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-gray-700 mb-2">学生B（不能与A相邻）</label>
+                        <select id="studentB" class="w-full p-2 border border-gray-300 rounded-lg">
+                            <option value="">-- 选择学生 --</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <button id="addAdjacencyRestriction" class="bg-secondary hover:bg-secondary/90 text-white px-4 py-2 rounded-lg btn-effect flex items-center gap-2 text-base mb-4">
+                    <i class="fa fa-plus"></i> 添加相邻限制
+                </button>
+                
+                <div id="adjacencyRestrictionsList" class="p-3 bg-gray-50 rounded-lg max-h-40 overflow-y-auto">
+                    <p class="text-gray-500 italic">暂无相邻限制</p>
+                </div>
+            </div>
+
+            <!-- 前后桌限制设置 -->
+            <div class="card">
+                <h2 class="text-xl font-semibold mb-4 flex items-center">
+                    <i class="fa fa-arrow-up text-primary mr-2"></i> 前后桌限制设置
+                </h2>
+                <p class="text-gray-600 mb-4">指定哪些学生不能坐在彼此前后的位置（前后）</p>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <label class="block text-gray-700 mb-2">学生A</label>
+                        <select id="studentC" class="w-full p-2 border border-gray-300 rounded-lg">
+                            <option value="">-- 选择学生 --</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-gray-700 mb-2">学生D（不能与A前后桌）</label>
+                        <select id="studentD" class="w-full p-2 border border-gray-300 rounded-lg">
+                            <option value="">-- 选择学生 --</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <button id="addFrontBackRestriction" class="bg-secondary hover:bg-secondary/90 text-white px-4 py-2 rounded-lg btn-effect flex items-center gap-2 text-base mb-4">
+                    <i class="fa fa-plus"></i> 添加前后桌限制
+                </button>
+                
+                <div id="frontBackRestrictionsList" class="p-3 bg-gray-50 rounded-lg max-h-40 overflow-y-auto">
+                    <p class="text-gray-500 italic">暂无前后桌限制</p>
+                </div>
+            </div>
+
+            <!-- 规则导出 -->
+            <div class="card">
+                <h2 class="text-xl font-semibold mb-4 flex items-center">
+                    <i class="fa fa-file-text-o text-primary mr-2"></i> 规则导出
+                </h2>
+                <p class="text-gray-600 mb-4">导出规则文件，可导入到座位安排程序中使用</p>
+                
+                <div class="flex flex-wrap gap-3">
+                    <button id="exportRulesBtn" class="bg-primary hover:bg-primary/90 text-white px-6 py-2.5 rounded-lg btn-effect flex items-center gap-2 text-base">
+                        <i class="fa fa-download"></i> 导出规则文件
+                    </button>
+                    <button id="clearAllRulesBtn" class="bg-danger hover:bg-danger/90 text-white px-6 py-2.5 rounded-lg btn-effect flex items-center gap-2 text-base">
+                        <i class="fa fa-trash"></i> 清除所有规则
+                    </button>
+                </div>
+            </div>
+        </main>
+
+        <footer class="mt-10 text-center text-gray-500 text-sm">
+            <p>座位规则编辑器 &copy; 2023 - 生成的规则文件可导入到座位安排程序中</p>
+        </footer>
+    </div>
+
+    <script src="utils.js"></script>
+    <script src="rules-editor-script.js"></script>
+</body>
+</html>
+    
