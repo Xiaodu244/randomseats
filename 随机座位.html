@@ -1,0 +1,931 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>随机座位安排程序</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3B82F6',
+                        secondary: '#10B981',
+                        accent: '#F59E0B',
+                        dark: '#1F2937',
+                        light: '#F3F4F6'
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .seat-hover {
+                @apply transition-all duration-300 hover:scale-105 hover:shadow-md;
+            }
+            .btn-effect {
+                @apply transition-all duration-200 active:scale-95;
+            }
+            .teacher-desk {
+                @apply w-1/2 h-16 bg-dark text-white rounded-lg flex items-center justify-center text-lg font-bold mx-auto my-3;
+            }
+            .seat {
+                @apply w-full h-full flex items-center justify-center p-2 seat-hover cursor-pointer transition-all duration-300 font-medium;
+            }
+            .modal-backdrop {
+                @apply fixed inset-0 bg-black/50 flex items-center justify-center z-50 transition-opacity duration-300;
+            }
+            .modal-content {
+                @apply bg-white rounded-xl shadow-2xl p-6 w-full max-w-3xl max-h-[90vh] overflow-auto transform transition-all duration-300;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 h-screen overflow-hidden flex flex-col">
+    <div class="container mx-auto px-4 md:px-8 max-w-7xl flex-1 flex flex-col">
+        <!-- 标题和操作区 -->
+        <header class="text-center mb-4 flex-shrink-0">
+            <h1 class="text-[clamp(1.5rem,3vw,2rem)] font-bold text-dark mb-3">随机座位安排程序</h1>
+            <div class="flex flex-wrap justify-center gap-3">
+                <button id="refreshBtn" class="bg-primary hover:bg-primary/90 text-white px-5 py-2.5 rounded-lg btn-effect flex items-center gap-2 text-base">
+                    <i class="fa fa-refresh"></i> 刷新座位
+                </button>
+                <button id="loadLastBtn" class="bg-accent hover:bg-accent/90 text-white px-5 py-2.5 rounded-lg btn-effect flex items-center gap-2 text-base">
+                    <i class="fa fa-history"></i> 加载上次座位
+                </button>
+                <button id="settingsBtn" class="bg-secondary hover:bg-secondary/90 text-white px-5 py-2.5 rounded-lg btn-effect flex items-center gap-2 text-base">
+                    <i class="fa fa-cog"></i> 设置
+                </button>
+            </div>
+        </header>
+
+        <!-- 教室区域 - 占主要空间 -->
+        <div id="classroom" class="bg-white rounded-xl shadow-xl p-6 mb-4 flex-1 overflow-hidden flex flex-col transition-all duration-500">
+            <!-- 讲台将在这里动态生成 -->
+            <div id="teacherDeskContainer" class="mb-4 flex-shrink-0">
+                <div id="teacherDesk" class="teacher-desk">
+                    讲台
+                </div>
+            </div>
+
+            <!-- 座位网格 -->
+            <div id="seatingGrid" class="grid grid-cols-8 gap-x-6 gap-y-2 flex-1 transition-all duration-500 overflow-hidden content-center">
+                <!-- 座位将在这里动态生成 -->
+            </div>
+        </div>
+    </div>
+
+    <!-- 设置界面模态框 -->
+    <div id="settingsModal" class="modal-backdrop hidden opacity-0 pointer-events-none">
+        <div class="modal-content">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-bold text-dark">设置</h2>
+                <button id="closeSettings" class="text-gray-500 hover:text-gray-700">
+                    <i class="fa fa-times text-xl"></i>
+                </button>
+            </div>
+            
+            <div class="space-y-6">
+                <!-- 姓名设置 -->
+                <div>
+                    <h3 class="text-lg font-semibold mb-3">姓名设置</h3>
+                    <div class="mb-4">
+                        <label class="block text-gray-700 mb-2">姓名字号调整</label>
+                        <input type="range" id="nameSizeSlider" min="12" max="24" value="16" 
+                               class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                        <div class="flex justify-between text-sm text-gray-500 mt-1">
+                            <span>小</span>
+                            <span id="nameSizeValue">16px</span>
+                            <span>大</span>
+                        </div>
+                    </div>
+                    <button id="editNamesBtn" class="bg-accent hover:bg-accent/90 text-white px-4 py-2 rounded-lg btn-effect flex items-center gap-2 text-base">
+                        <i class="fa fa-pencil"></i> 编辑姓名
+                    </button>
+                </div>
+                
+                <!-- 布局设置 -->
+                <div>
+                    <h3 class="text-lg font-semibold mb-3">布局设置</h3>
+                    <button id="toggleDeskBtn" class="bg-secondary hover:bg-secondary/90 text-white px-4 py-2 rounded-lg btn-effect flex items-center gap-2 text-base mb-3">
+                        <i class="fa fa-exchange"></i> 切换讲台位置
+                    </button>
+                </div>
+                
+                <!-- 管理 -->
+                <div>
+                    <h3 class="text-lg font-semibold mb-3">规则管理</h3>
+                    <p class="text-gray-600 mb-3">使用独立的规则编辑器，在此导入</p>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                        <button id="importRulesBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg btn-effect flex items-center gap-2 text-base">
+                            <i class="fa fa-upload"></i> 导入
+                        </button>
+                        <button id="clearRulesBtn" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg btn-effect flex items-center gap-2 text-base">
+                            <i class="fa fa-trash"></i> 清除
+                        </button>
+                    </div>
+                    <input type="file" id="rulesFileInput" accept=".json" class="hidden">
+                </div>
+                
+                <!-- 导出设置 -->
+                <div>
+                    <h3 class="text-lg font-semibold mb-3">导出座位</h3>
+                    <button id="exportSeatingBtn" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg btn-effect flex items-center gap-2 text-base">
+                        <i class="fa fa-file-image-o"></i> 导出座位截图
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 编辑姓名模态框 -->
+    <div id="nameEditorModal" class="modal-backdrop hidden opacity-0 pointer-events-none">
+        <div class="modal-content">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-bold text-dark">编辑学生姓名</h2>
+                <button id="closeNameEditor" class="text-gray-500 hover:text-gray-700">
+                    <i class="fa fa-times text-xl"></i>
+                </button>
+            </div>
+            <p class="text-gray-600 mb-4">请输入学生姓名，每行一个。最多56人（8×7）</p>
+            <textarea id="nameList" class="w-full h-64 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary resize-none" placeholder="输入学生姓名，每行一个..."></textarea>
+            <div class="mt-4 flex justify-end">
+                <button id="saveNames" class="bg-primary text-white px-6 py-2 rounded-lg btn-effect">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 座位历史模态框 -->
+    <div id="seatHistoryModal" class="modal-backdrop hidden opacity-0 pointer-events-none">
+        <div class="modal-content max-w-md">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-bold text-dark" id="historyStudentName">学生座位历史</h2>
+                <button id="closeHistory" class="text-gray-500 hover:text-gray-700">
+                    <i class="fa fa-times text-xl"></i>
+                </button>
+            </div>
+            <div id="historyContent" class="space-y-2">
+                <!-- 历史记录将在这里显示 -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 简单加密解密函数
+        const encrypt = (data) => {
+            const jsonStr = JSON.stringify(data);
+            let encrypted = '';
+            for (let i = 0; i < jsonStr.length; i++) {
+                encrypted += String.fromCharCode(jsonStr.charCodeAt(i) + 1);
+            }
+            return encrypted;
+        };
+
+        const decrypt = (encrypted) => {
+            let jsonStr = '';
+            for (let i = 0; i < encrypted.length; i++) {
+                jsonStr += String.fromCharCode(encrypted.charCodeAt(i) - 1);
+            }
+            return JSON.parse(jsonStr);
+        };
+
+        // Cookie操作函数
+        const setCookie = (name, value, days = 30) => {
+            const date = new Date();
+            date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+            const expires = `expires=${date.toUTCString()}`;
+            document.cookie = `${name}=${encodeURIComponent(value)}; ${expires}; path=/`;
+        };
+
+        const getCookie = (name) => {
+            const nameEQ = `${name}=`;
+            const ca = document.cookie.split(';');
+            for (let i = 0; i < ca.length; i++) {
+                let c = ca[i];
+                while (c.charAt(0) === ' ') c = c.substring(1, c.length);
+                if (c.indexOf(nameEQ) === 0) return decodeURIComponent(c.substring(nameEQ.length, c.length));
+            }
+            return null;
+        };
+
+        // 配置参数
+        const ROWS = 7;    // 纵向7行
+        const COLS = 8;    // 横向8列
+        let teacherDeskOnTop = true; // 讲台初始在上方
+        let currentSeating = []; // 当前座位安排
+        let nameSize = 16; // 姓名字号，默认16px
+        let nameList = [
+            // 学生姓名列表
+            "张三", "李四", "王五", "赵六", "钱七", "孙八", "周九", "吴十",
+            "郑一", "王二", "陈三", "杨四", "黄五", "赵六", "吴七", "周八",
+            "徐九", "孙十", "马一", "朱二", "胡三", "林四", "郭五", "何六",
+            "高七", "罗八", "郑九", "梁十", "谢一", "宋二", "唐三", "许四",
+            "韩五", "冯六", "于七", "董八", "萧九", "程十", "曹一", "袁二",
+            "邓三", "傅四", "沈五", "曾六", "彭七", "吕八", "苏九", "卢十",
+            "蒋一", "蔡二", "贾三", "丁四", "魏五", "薛六", "叶七", "欧阳八"
+        ];
+        
+        // 学生历史记录
+        let studentHistory = {};
+        
+        // 规则设置
+        let rowRestrictions = {}; // {学生姓名: [允许的行索引数组]}
+        let adjacencyRestrictions = []; // [{a: 学生A, b: 学生B}, ...]
+        let frontBackRestrictions = []; // [{a: 学生A, b: 学生B}, ...] 前后桌限制
+        
+        // 导入密码检测
+        let importBuffer = "";
+        const IMPORT_PASSWORD = "daoru";
+
+        // DOM 元素
+        const seatingGrid = document.getElementById('seatingGrid');
+        const refreshBtn = document.getElementById('refreshBtn');
+        const loadLastBtn = document.getElementById('loadLastBtn');
+        const settingsBtn = document.getElementById('settingsBtn');
+        const settingsModal = document.getElementById('settingsModal');
+        const closeSettings = document.getElementById('closeSettings');
+        const nameSizeSlider = document.getElementById('nameSizeSlider');
+        const nameSizeValue = document.getElementById('nameSizeValue');
+        const editNamesBtn = document.getElementById('editNamesBtn');
+        const toggleDeskBtn = document.getElementById('toggleDeskBtn');
+        const importRulesBtn = document.getElementById('importRulesBtn');
+        const clearRulesBtn = document.getElementById('clearRulesBtn');
+        const rulesFileInput = document.getElementById('rulesFileInput');
+        const exportSeatingBtn = document.getElementById('exportSeatingBtn');
+        const nameEditorModal = document.getElementById('nameEditorModal');
+        const closeNameEditor = document.getElementById('closeNameEditor');
+        const nameListElement = document.getElementById('nameList');
+        const saveNames = document.getElementById('saveNames');
+        const seatHistoryModal = document.getElementById('seatHistoryModal');
+        const closeHistory = document.getElementById('closeHistory');
+        const historyStudentName = document.getElementById('historyStudentName');
+        const historyContent = document.getElementById('historyContent');
+
+        // 初始化
+        function init() {
+            // 从Cookie加载数据
+            loadFromCookies();
+            
+            // 生成座位
+            generateSeating();
+            
+            // 初始化字号显示
+            nameSizeSlider.value = nameSize;
+            nameSizeValue.textContent = `${nameSize}px`;
+            
+            // 事件监听
+            refreshBtn.addEventListener('click', refreshSeating);
+            loadLastBtn.addEventListener('click', loadLastSeating);
+            settingsBtn.addEventListener('click', openSettings);
+            closeSettings.addEventListener('click', closeSettingsModal);
+            nameSizeSlider.addEventListener('input', adjustNameSize);
+            editNamesBtn.addEventListener('click', openNameEditor);
+            toggleDeskBtn.addEventListener('click', toggleTeacherDeskPosition);
+            importRulesBtn.addEventListener('click', importRules);
+            clearRulesBtn.addEventListener('click', clearAllRules);
+            exportSeatingBtn.addEventListener('click', exportSeatingScreenshot);
+            closeNameEditor.addEventListener('click', closeNameEditorModal);
+            saveNames.addEventListener('click', saveNameList);
+            closeHistory.addEventListener('click', closeHistoryModal);
+            
+            // 监听键盘输入用于导入
+            document.addEventListener('keydown', handleKeyPress);
+            
+            // 响应窗口大小变化
+            window.addEventListener('resize', adjustLayoutForScreen);
+            adjustLayoutForScreen();
+        }
+
+        // 调整布局以适应屏幕
+        function adjustLayoutForScreen() {
+            generateSeating();
+        }
+
+        // 从Cookie加载数据
+        function loadFromCookies() {
+            const savedNames = getCookie('seatNames');
+            const savedHistory = getCookie('studentHistory');
+            const savedRowRestrictions = getCookie('rowRestrictions');
+            const savedAdjacencyRestrictions = getCookie('adjacencyRestrictions');
+            const savedFrontBackRestrictions = getCookie('frontBackRestrictions');
+            const savedDeskPosition = getCookie('teacherDeskOnTop');
+            const savedSeating = getCookie('currentSeating');
+            const savedNameSize = getCookie('nameSize');
+            
+            if (savedNames) {
+                try {
+                    nameList = decrypt(savedNames);
+                } catch (e) {
+                    console.error('Failed to decrypt name list', e);
+                }
+            }
+            
+            if (savedHistory) {
+                try {
+                    studentHistory = decrypt(savedHistory);
+                } catch (e) {
+                    console.error('Failed to decrypt student history', e);
+                }
+            }
+            
+            if (savedRowRestrictions) {
+                try {
+                    rowRestrictions = decrypt(savedRowRestrictions);
+                } catch (e) {
+                    console.error('Failed to decrypt row restrictions', e);
+                }
+            }
+            
+            if (savedAdjacencyRestrictions) {
+                try {
+                    adjacencyRestrictions = decrypt(savedAdjacencyRestrictions);
+                } catch (e) {
+                    console.error('Failed to decrypt adjacency restrictions', e);
+                }
+            }
+            
+            if (savedFrontBackRestrictions) {
+                try {
+                    frontBackRestrictions = decrypt(savedFrontBackRestrictions);
+                } catch (e) {
+                    console.error('Failed to decrypt front-back restrictions', e);
+                }
+            }
+            
+            if (savedDeskPosition) {
+                try {
+                    teacherDeskOnTop = decrypt(savedDeskPosition);
+                    // 根据讲台位置调整容器布局
+                    adjustDeskContainer();
+                } catch (e) {
+                    console.error('Failed to decrypt desk position', e);
+                }
+            }
+            
+            if (savedSeating) {
+                try {
+                    currentSeating = decrypt(savedSeating);
+                } catch (e) {
+                    console.error('Failed to decrypt current seating', e);
+                }
+            }
+            
+            if (savedNameSize) {
+                try {
+                    nameSize = decrypt(savedNameSize);
+                } catch (e) {
+                    console.error('Failed to decrypt name size', e);
+                }
+            }
+        }
+
+        // 保存数据到Cookie
+        function saveToCookies() {
+            setCookie('seatNames', encrypt(nameList));
+            setCookie('studentHistory', encrypt(studentHistory));
+            setCookie('rowRestrictions', encrypt(rowRestrictions));
+            setCookie('adjacencyRestrictions', encrypt(adjacencyRestrictions));
+            setCookie('frontBackRestrictions', encrypt(frontBackRestrictions));
+            setCookie('teacherDeskOnTop', encrypt(teacherDeskOnTop));
+            setCookie('currentSeating', encrypt(currentSeating));
+            setCookie('nameSize', encrypt(nameSize));
+        }
+
+        // 生成座位布局
+        function generateSeating() {
+            seatingGrid.innerHTML = '';
+            createSeats();
+            saveToCookies();
+        }
+
+        // 创建座位
+        function createSeats() {
+            seatingGrid.innerHTML = '';
+            
+            // 对座位进行排序，考虑讲台位置（实现中心对称）
+            let rowOrder = Array.from({length: ROWS}, (_, i) => i);
+            if (!teacherDeskOnTop) {
+                rowOrder = rowOrder.reverse();
+            }
+            
+            // 创建每个座位
+            rowOrder.forEach(row => {
+                // 列也需要反转以实现完全的中心对称
+                const colOrder = teacherDeskOnTop ? 
+                    Array.from({length: COLS}, (_, i) => i) : 
+                    Array.from({length: COLS}, (_, i) => COLS - 1 - i);
+                
+                colOrder.forEach(col => {
+                    const seatIndex = row * COLS + col;
+                    const seatElement = document.createElement('div');
+                    seatElement.className = 'flex items-center justify-center';
+                    
+                    const seatInner = document.createElement('div');
+                    seatInner.className = 'seat text-gray-800';
+                    seatInner.style.fontSize = `${nameSize}px`;
+                    
+                    // 检查是否有学生分配到这个座位
+                    if (currentSeating[seatIndex] && currentSeating[seatIndex] !== '') {
+                        seatInner.textContent = currentSeating[seatIndex];
+                        
+                        // 添加点击事件查看历史
+                        seatInner.addEventListener('click', () => {
+                            showSeatHistory(currentSeating[seatIndex]);
+                        });
+                    }
+                    
+                    seatElement.appendChild(seatInner);
+                    seatingGrid.appendChild(seatElement);
+                });
+            });
+        }
+
+        // 刷新座位安排
+        function refreshSeating() {
+            // 创建所有座位索引的数组
+            const allSeats = Array.from({length: ROWS * COLS}, (_, i) => i);
+            
+            // 复制姓名列表
+            let availableStudents = [...nameList];
+            
+            // 为有保底机制的学生优先分配座位
+            const studentsNeedingGuarantee = checkGuaranteeNeeded();
+            
+            // 先处理需要保底的学生
+            studentsNeedingGuarantee.forEach(student => {
+                // 只允许前四排的座位
+                const eligibleSeats = allSeats.filter(seatIndex => {
+                    const row = Math.floor(seatIndex / COLS);
+                    return row < 4; // 前四排
+                });
+                
+                // 应用行限制
+                const restrictedEligibleSeats = applyRowRestrictions(student, eligibleSeats);
+                
+                // 随机选择一个座位
+                const randomIndex = Math.floor(Math.random() * restrictedEligibleSeats.length);
+                const seatIndex = restrictedEligibleSeats[randomIndex];
+                
+                // 分配座位
+                currentSeating[seatIndex] = student;
+                
+                // 从可用学生和可用座位中移除
+                availableStudents = availableStudents.filter(s => s !== student);
+                const seatPos = allSeats.indexOf(seatIndex);
+                if (seatPos !== -1) {
+                    allSeats.splice(seatPos, 1);
+                }
+                
+                // 更新历史记录
+                updateStudentHistory(student, Math.floor(seatIndex / COLS));
+            });
+            
+            // 为剩余学生分配座位
+            availableStudents.forEach(student => {
+                // 应用行限制
+                const eligibleSeats = applyRowRestrictions(student, allSeats);
+                
+                // 如果没有符合条件的座位，使用所有剩余座位
+                const seatsToUse = eligibleSeats.length > 0 ? eligibleSeats : allSeats;
+                
+                // 随机选择一个座位
+                let randomIndex = Math.floor(Math.random() * seatsToUse.length);
+                let seatIndex = seatsToUse[randomIndex];
+                
+                // 检查各种限制
+                let validSeatFound = false;
+                let attempts = 0;
+                
+                // 最多尝试10次找到合适的座位
+                while (!validSeatFound && attempts < 10 && seatsToUse.length > 0) {
+                    // 检查这个座位是否符合所有限制
+                    if (checkAdjacencyRestrictions(student, seatIndex) && 
+                        checkFrontBackRestrictions(student, seatIndex)) {
+                        validSeatFound = true;
+                    } else {
+                        // 尝试另一个座位
+                        seatsToUse.splice(randomIndex, 1);
+                        if (seatsToUse.length > 0) {
+                            randomIndex = Math.floor(Math.random() * seatsToUse.length);
+                            seatIndex = seatsToUse[randomIndex];
+                        }
+                    }
+                    attempts++;
+                }
+                
+                if (!validSeatFound && allSeats.length > 0) {
+                    // 如果找不到符合条件的座位，强制分配
+                    randomIndex = Math.floor(Math.random() * allSeats.length);
+                    seatIndex = allSeats[randomIndex];
+                }
+                
+                // 分配座位
+                currentSeating[seatIndex] = student;
+                
+                // 从可用座位中移除
+                const seatPos = allSeats.indexOf(seatIndex);
+                if (seatPos !== -1) {
+                    allSeats.splice(seatPos, 1);
+                }
+                
+                // 更新历史记录
+                updateStudentHistory(student, Math.floor(seatIndex / COLS));
+            });
+            
+            // 剩余座位留空
+            allSeats.forEach(seatIndex => {
+                currentSeating[seatIndex] = '';
+            });
+            
+            // 重新生成座位显示
+            createSeats();
+        }
+
+        // 加载上次座位
+        function loadLastSeating() {
+            const savedSeating = getCookie('currentSeating');
+            if (savedSeating) {
+                try {
+                    currentSeating = decrypt(savedSeating);
+                    createSeats();
+                    alert('已加载上次座位安排');
+                } catch (e) {
+                    console.error('Failed to load last seating', e);
+                    alert('加载上次座位失败');
+                }
+            } else {
+                alert('没有找到保存的座位安排');
+            }
+        }
+
+        // 检查哪些学生需要保底
+        function checkGuaranteeNeeded() {
+            const result = [];
+            
+            nameList.forEach(student => {
+                if (!studentHistory[student]) return;
+                
+                // 检查最近两次是否都在最后一排
+                const history = studentHistory[student];
+                if (history.length >= 2) {
+                    const lastRow = ROWS - 1;
+                    if (history[history.length - 1] === lastRow && 
+                        history[history.length - 2] === lastRow) {
+                        result.push(student);
+                    }
+                }
+            });
+            
+            return result;
+        }
+
+        // 应用行限制
+        function applyRowRestrictions(student, seats) {
+            if (!rowRestrictions[student] || rowRestrictions[student].length === 0) {
+                return seats;
+            }
+            
+            // 过滤出符合行限制的座位
+            return seats.filter(seatIndex => {
+                const row = Math.floor(seatIndex / COLS);
+                return rowRestrictions[student].includes(row);
+            });
+        }
+
+        // 检查相邻限制（左右）
+        function checkAdjacencyRestrictions(student, seatIndex) {
+            // 获取当前座位的行和列
+            const row = Math.floor(seatIndex / COLS);
+            const col = seatIndex % COLS;
+            
+            // 检查左右两个方向的座位
+            const directions = [
+                {r: 0, c: -1}, // 左
+                {r: 0, c: 1}   // 右
+            ];
+            
+            for (const dir of directions) {
+                const newRow = row + dir.r;
+                const newCol = col + dir.c;
+                
+                // 检查是否在有效范围内
+                if (newRow >= 0 && newRow < ROWS && newCol >= 0 && newCol < COLS) {
+                    const adjacentSeatIndex = newRow * COLS + newCol;
+                    const adjacentStudent = currentSeating[adjacentSeatIndex];
+                    
+                    // 检查是否已分配且存在限制
+                    if (adjacentStudent && adjacentStudent !== '') {
+                        // 检查这两个学生是否有相邻限制
+                        const hasRestriction = adjacencyRestrictions.some(rest => 
+                            (rest.a === student && rest.b === adjacentStudent) || 
+                            (rest.a === adjacentStudent && rest.b === student)
+                        );
+                        
+                        if (hasRestriction) {
+                            return false; // 有相邻限制，不符合条件
+                        }
+                    }
+                }
+            }
+            
+            return true; // 符合条件
+        }
+
+        // 检查前后桌限制
+        function checkFrontBackRestrictions(student, seatIndex) {
+            // 获取当前座位的行和列
+            const row = Math.floor(seatIndex / COLS);
+            const col = seatIndex % COLS;
+            
+            // 检查前后两个方向的座位
+            const directions = [
+                {r: -1, c: 0}, // 前
+                {r: 1, c: 0}   // 后
+            ];
+            
+            for (const dir of directions) {
+                const newRow = row + dir.r;
+                const newCol = col + dir.c;
+                
+                // 检查是否在有效范围内
+                if (newRow >= 0 && newRow < ROWS && newCol >= 0 && newCol < COLS) {
+                    const frontBackSeatIndex = newRow * COLS + newCol;
+                    const frontBackStudent = currentSeating[frontBackSeatIndex];
+                    
+                    // 检查是否已分配且存在限制
+                    if (frontBackStudent && frontBackStudent !== '') {
+                        // 检查这两个学生是否有前后桌限制
+                        const hasRestriction = frontBackRestrictions.some(rest => 
+                            (rest.a === student && rest.b === frontBackStudent) || 
+                            (rest.a === frontBackStudent && rest.b === student)
+                        );
+                        
+                        if (hasRestriction) {
+                            return false; // 有前后桌限制，不符合条件
+                        }
+                    }
+                }
+            }
+            
+            return true; // 符合条件
+        }
+
+        // 更新学生历史记录
+        function updateStudentHistory(student, row) {
+            if (!studentHistory[student]) {
+                studentHistory[student] = [];
+            }
+            
+            // 添加最新的行记录
+            studentHistory[student].push(row);
+            
+            // 只保留最近10条记录
+            if (studentHistory[student].length > 10) {
+                studentHistory[student].shift();
+            }
+        }
+
+        // 调整讲台容器位置 - 确保讲台字块也一起移动
+        function adjustDeskContainer() {
+            const classroom = document.getElementById('classroom');
+            const teacherDeskContainer = document.getElementById('teacherDeskContainer');
+            const seatingGrid = document.getElementById('seatingGrid');
+            
+            // 清空教室容器，重新排列讲台和座位网格
+            classroom.innerHTML = '';
+            
+            if (teacherDeskOnTop) {
+                // 讲台在上方
+                classroom.appendChild(teacherDeskContainer);
+                classroom.appendChild(seatingGrid);
+                teacherDeskContainer.classList.remove('mt-4');
+                teacherDeskContainer.classList.add('mb-4');
+            } else {
+                // 讲台在下方
+                classroom.appendChild(seatingGrid);
+                classroom.appendChild(teacherDeskContainer);
+                teacherDeskContainer.classList.remove('mb-4');
+                teacherDeskContainer.classList.add('mt-4');
+            }
+        }
+
+        // 切换讲台位置
+        function toggleTeacherDeskPosition() {
+            teacherDeskOnTop = !teacherDeskOnTop;
+            adjustDeskContainer();
+            generateSeating(); // 重新生成座位，实现中心对称
+        }
+
+        // 调整姓名字号
+        function adjustNameSize() {
+            nameSize = parseInt(nameSizeSlider.value);
+            nameSizeValue.textContent = `${nameSize}px`;
+            createSeats(); // 重新生成座位以应用新字号
+        }
+
+        // 打开设置界面
+        function openSettings() {
+            openModal(settingsModal);
+        }
+
+        // 关闭设置界面
+        function closeSettingsModal() {
+            closeModal(settingsModal);
+        }
+
+        // 打开姓名编辑器
+        function openNameEditor() {
+            // 将姓名列表显示在文本框中
+            nameListElement.value = nameList.join('\n');
+            openModal(nameEditorModal);
+            closeSettingsModal(); // 关闭设置界面
+        }
+
+        // 关闭姓名编辑器
+        function closeNameEditorModal() {
+            closeModal(nameEditorModal);
+        }
+
+        // 保存姓名列表
+        function saveNameList() {
+            // 从文本框获取姓名列表，过滤空行
+            const newNames = nameListElement.value.split('\n')
+                .map(name => name.trim())
+                .filter(name => name !== '');
+            
+            // 限制最多56人（8×7）
+            if (newNames.length > ROWS * COLS) {
+                alert(`最多只能有${ROWS * COLS}名学生`);
+                return;
+            }
+            
+            nameList = newNames;
+            
+            // 为新学生初始化历史记录
+            nameList.forEach(student => {
+                if (!studentHistory[student]) {
+                    studentHistory[student] = [];
+                }
+            });
+            
+            // 刷新座位
+            refreshSeating();
+            
+            // 关闭模态框
+            closeNameEditorModal();
+        }
+
+        // 导入规则
+        function importRules() {
+            rulesFileInput.click();
+            rulesFileInput.onchange = function(event) {
+                const file = event.target.files[0];
+                if (!file) return;
+                
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    try {
+                        const rules = JSON.parse(e.target.result);
+                        if (rules.rowRestrictions && rules.adjacencyRestrictions) {
+                            rowRestrictions = rules.rowRestrictions;
+                            adjacencyRestrictions = rules.adjacencyRestrictions || [];
+                            frontBackRestrictions = rules.frontBackRestrictions || [];
+                            saveToCookies();
+                            alert('规则导入成功');
+                        } else {
+                            alert('无效的规则文件，请使用规则编辑器生成');
+                        }
+                    } catch (error) {
+                        console.error('Error importing rules:', error);
+                        alert('导入失败，请检查文件格式');
+                    }
+                };
+                reader.readAsText(file);
+            };
+        }
+
+        // 清除所有规则
+        function clearAllRules() {
+            if (confirm('确定要清除所有规则吗？')) {
+                rowRestrictions = {};
+                adjacencyRestrictions = [];
+                frontBackRestrictions = [];
+                saveToCookies();
+                alert('所有规则已清除');
+            }
+        }
+
+        // 导出座位截图
+        function exportSeatingScreenshot() {
+            html2canvas(document.getElementById('classroom')).then(canvas => {
+                // 创建下载链接
+                const link = document.createElement('a');
+                link.download = 'output.png';
+                link.href = canvas.toDataURL('image/png');
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                alert('座位截图已保存到下载文件夹');
+            }).catch(error => {
+                console.error('Error exporting screenshot:', error);
+                alert('截图导出失败');
+            });
+        }
+
+        // 显示座位历史
+        function showSeatHistory(student) {
+            historyStudentName.textContent = `${student} 的座位历史`;
+            historyContent.innerHTML = '';
+            
+            if (!studentHistory[student] || studentHistory[student].length === 0) {
+                historyContent.innerHTML = '<p class="text-gray-500 italic">暂无历史记录</p>';
+            } else {
+                studentHistory[student].forEach((row, index) => {
+                    const entry = document.createElement('div');
+                    entry.className = 'p-2 border-b border-gray-200 last:border-0';
+                    
+                    // 计算是第几次分配（从新到旧）
+                    const order = studentHistory[student].length - index;
+                    
+                    // 计算显示的行号（考虑讲台位置）
+                    let displayRow = row + 1;
+                    if (!teacherDeskOnTop) {
+                        displayRow = ROWS - row;
+                    }
+                    
+                    entry.textContent = `第 ${order} 次: 第 ${displayRow} 行`;
+                    historyContent.appendChild(entry);
+                });
+            }
+            
+            openModal(seatHistoryModal);
+        }
+
+        // 关闭历史记录模态框
+        function closeHistoryModal() {
+            closeModal(seatHistoryModal);
+        }
+
+        // 打开模态框
+        function openModal(modal) {
+            modal.classList.remove('hidden', 'opacity-0', 'pointer-events-none');
+            modal.classList.add('opacity-100', 'pointer-events-auto');
+        }
+
+        // 关闭模态框
+        function closeModal(modal) {
+            modal.classList.remove('opacity-100', 'pointer-events-auto');
+            modal.classList.add('opacity-0', 'pointer-events-none');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+            }, 300);
+        }
+
+        // 处理键盘输入用于导入
+        function handleKeyPress(e) {
+            // 如果有模态框打开，不处理导入输入
+            if (!settingsModal.classList.contains('hidden') || 
+                !nameEditorModal.classList.contains('hidden') ||
+                !seatHistoryModal.classList.contains('hidden')) {
+                return;
+            }
+            
+            // ESC键重置导入缓冲区
+            if (e.key === 'Escape') {
+                importBuffer = '';
+                return;
+            }
+            
+            // 只处理字母键
+            if (/^[a-zA-Z]$/.test(e.key)) {
+                importBuffer += e.key.toLowerCase();
+                
+                // 只保留与导入密码长度相同的最后几个字符
+                if (importBuffer.length > IMPORT_PASSWORD.length) {
+                    importBuffer = importBuffer.slice(-IMPORT_PASSWORD.length);
+                }
+                
+                // 检查是否匹配导入密码
+                if (importBuffer === IMPORT_PASSWORD) {
+                    importBuffer = '';
+                    importRules();
+                }
+            } else {
+                // 其他键重置导入缓冲区
+                importBuffer = '';
+            }
+        }
+
+        // 初始化程序
+        window.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
+    
