@@ -1,0 +1,1323 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>随机座位生成器（规则锁定版）</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lucide@0.544.0/dist/umd/lucide.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .app-container {
+            width: 100vw;
+            height: 100vh;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        
+        .seat-container {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            gap: 8px;
+            width: 100%;
+            flex: 1;
+            min-height: 0;
+            margin: 10px 0;
+        }
+        
+        .seat {
+            aspect-ratio: 1.2;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: clamp(14px, 1.2vw, 18px);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            position: relative;
+            overflow: hidden;
+            word-break: keep-all;
+            padding: 5px;
+        }
+        
+        .seat:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+        }
+        
+        .controls {
+            backdrop-filter: blur(10px);
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 15px 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        
+        .btn {
+            padding: 10px 20px;
+            border-radius: 10px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            border: none;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-size: clamp(14px, 1vw, 16px);
+        }
+        
+        .btn-primary {
+            background: #4f46e5;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #4338ca;
+            transform: translateY(-2px);
+        }
+        
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+        }
+        
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+        
+        .btn-export {
+            background: #10b981;
+            color: white;
+        }
+        
+        .btn-export:hover {
+            background: #059669;
+            transform: translateY(-2px);
+        }
+        
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(5px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        
+        .modal-content {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            width: 90%;
+            max-width: 600px;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        
+        .history-item {
+            padding: 12px;
+            border-radius: 8px;
+            margin: 8px 0;
+            background: #f8fafc;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+        
+        .history-item:hover {
+            background: #e2e8f0;
+        }
+        
+        .settings-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            margin-top: 20px;
+        }
+        
+        .setting-section {
+            background: #f8fafc;
+            border-radius: 12px;
+            padding: 15px;
+        }
+        
+        .setting-title {
+            font-weight: 700;
+            margin-bottom: 15px;
+            color: #1e293b;
+        }
+        
+        .student-selector {
+            width: 100%;
+            padding: 8px 12px;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+        
+        .row-selector {
+            width: 100%;
+            padding: 8px 12px;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+        
+        .restriction-pair {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        
+        .restriction-pair select {
+            flex: 1;
+            padding: 8px 12px;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+        }
+        
+        .add-restriction-btn {
+            background: #4f46e5;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 8px 12px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        
+        .restriction-list {
+            margin-top: 15px;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+        
+        .restriction-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px;
+            background: #e2e8f0;
+            border-radius: 6px;
+            margin-bottom: 5px;
+        }
+        
+        .remove-btn {
+            background: #ef4444;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 4px 8px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        
+        .fixed-seat-grid {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            gap: 5px;
+            margin-top: 15px;
+        }
+        
+        .fixed-seat-item {
+            aspect-ratio: 1.2;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #f1f5f9;
+            border-radius: 6px;
+            padding: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            text-align: center;
+        }
+        
+        .fixed-seat-item.active {
+            background: #4f46e5;
+            color: white;
+        }
+        
+        .fixed-seat-item:hover {
+            background: #e2e8f0;
+        }
+        
+        .fixed-seat-item.active:hover {
+            background: #4338ca;
+        }
+        
+        .fixed-seat {
+            background: linear-gradient(135deg, #fbbf24, #f59e0b);
+            color: white;
+        }
+        
+        .time-display {
+            color: white;
+            font-size: clamp(14px, 1vw, 16px);
+            font-weight: 500;
+        }
+        
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .header h1 {
+            color: white;
+            font-size: clamp(24px, 2vw, 32px);
+            font-weight: 700;
+        }
+        
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .modal-close {
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 20px;
+            color: #64748b;
+        }
+        
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 12px 20px;
+            border-radius: 8px;
+            color: white;
+            z-index: 1001;
+            transform: translateX(120%);
+            transition: transform 0.3s ease;
+            max-width: 300px;
+        }
+        
+        .notification.show {
+            transform: translateX(0);
+        }
+        
+        .notification.success {
+            background: #10b981;
+        }
+        
+        .notification.error {
+            background: #ef4444;
+        }
+        
+        .export-success {
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .export-success h3 {
+            color: #10b981;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <div class="header">
+            <h1>🎓 随机座位生成器</h1>
+            <div class="flex gap-3">
+                <button id="settingsBtn" class="btn btn-secondary">
+                    <i data-lucide="settings"></i>
+                    设置
+                </button>
+                <button id="exportBtn" class="btn btn-export">
+                    <i data-lucide="download"></i>
+                    导出锁定规则的网页
+                </button>
+                <button id="historyBtn" class="btn btn-secondary">
+                    <i data-lucide="history"></i>
+                    历史记录
+                </button>
+            </div>
+        </div>
+
+        <!-- Controls -->
+        <div class="controls">
+            <div class="flex gap-3">
+                <button id="generateBtn" class="btn btn-primary">
+                    <i data-lucide="refresh-cw"></i>
+                    生成随机座位
+                </button>
+                <button id="saveBtn" class="btn btn-secondary">
+                    <i data-lucide="save"></i>
+                    保存当前座位
+                </button>
+            </div>
+            <div class="time-display">
+                当前时间: <span id="currentTime"></span>
+            </div>
+        </div>
+
+        <!-- Seat Grid -->
+        <div class="seat-container" id="seatContainer"></div>
+    </div>
+
+    <!-- History Modal -->
+    <div id="historyModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="text-2xl font-bold">历史记录</h2>
+                <button onclick="closeHistoryModal()" class="modal-close">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+            <div id="historyList" class="space-y-2">
+                <!-- History items will be generated here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="modal">
+        <div class="modal-content">
+            <div id="passwordPrompt">
+                <div class="modal-header">
+                    <h2 class="text-2xl font-bold">验证身份</h2>
+                    <button onclick="closeSettingsModal()" class="modal-close">
+                        <i data-lucide="x"></i>
+                    </button>
+                </div>
+                <h3 class="text-lg font-semibold mb-4">请输入密码</h3>
+                <input type="password" id="passwordInput" class="student-selector" placeholder="输入密码">
+                <button onclick="checkPassword()" class="btn btn-primary mt-4 w-full">确认</button>
+            </div>
+            
+            <div id="settingsContent" style="display: none;">
+                <div class="modal-header">
+                    <h2 class="text-2xl font-bold">座位设置</h2>
+                    <button onclick="closeSettingsModal()" class="modal-close">
+                        <i data-lucide="x"></i>
+                    </button>
+                </div>
+                
+                <div class="settings-grid">
+                    <!-- 行限制设置 -->
+                    <div class="setting-section">
+                        <div class="setting-title">1. 行限制</div>
+                        <select id="rowRestrictionStudent" class="student-selector">
+                            <option value="">选择学生</option>
+                        </select>
+                        <select id="rowRestrictionRow" class="row-selector">
+                            <option value="">选择固定行</option>
+                            <option value="0">第1行</option>
+                            <option value="1">第2行</option>
+                            <option value="2">第3行</option>
+                            <option value="3">第4行</option>
+                            <option value="4">第5行</option>
+                            <option value="5">第6行</option>
+                            <option value="6">第7行</option>
+                        </select>
+                        <button class="add-restriction-btn" onclick="addRowRestriction()">添加行限制</button>
+                        <div id="rowRestrictionList" class="restriction-list"></div>
+                    </div>
+
+                    <!-- 相邻限制设置 -->
+                    <div class="setting-section">
+                        <div class="setting-title">2. 相邻限制（左右不能挨着）</div>
+                        <div class="restriction-pair">
+                            <select id="adjacentStudent1" class="student-selector">
+                                <option value="">选择学生A</option>
+                            </select>
+                            <select id="adjacentStudent2" class="student-selector">
+                                <option value="">选择学生B</option>
+                            </select>
+                        </div>
+                        <button class="add-restriction-btn" onclick="addAdjacentRestriction()">添加相邻限制</button>
+                        <div id="adjacentRestrictionList" class="restriction-list"></div>
+                    </div>
+
+                    <!-- 前后桌限制设置 -->
+                    <div class="setting-section">
+                        <div class="setting-title">3. 前后桌限制（前后不能挨着）</div>
+                        <div class="restriction-pair">
+                            <select id="frontBackStudent1" class="student-selector">
+                                <option value="">选择学生A</option>
+                            </select>
+                            <select id="frontBackStudent2" class="student-selector">
+                                <option value="">选择学生B</option>
+                            </select>
+                        </div>
+                        <button class="add-restriction-btn" onclick="addFrontBackRestriction()">添加前后桌限制</button>
+                        <div id="frontBackRestrictionList" class="restriction-list"></div>
+                    </div>
+
+                    <!-- 固定座位设置 -->
+                    <div class="setting-section">
+                        <div class="setting-title">4. 固定座位</div>
+                        <select id="fixedSeatStudent" class="student-selector">
+                            <option value="">选择学生</option>
+                        </select>
+                        <div id="fixedSeatGrid" class="fixed-seat-grid"></div>
+                        <div id="fixedSeatList" class="restriction-list"></div>
+                    </div>
+                </div>
+                
+                <button class="btn btn-primary mt-6 w-full" onclick="saveAllSettings()">保存所有设置</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 导出成功弹窗 -->
+    <div id="exportModal" class="modal">
+        <div class="modal-content">
+            <div class="export-success">
+                <i data-lucide="check-circle" style="font-size: 48px; color: #10b981;"></i>
+                <h3 class="text-xl font-bold mt-4">导出成功！</h3>
+                <p class="text-gray-600 mt-2">已生成包含锁定规则的新网页文件</p>
+                <p class="text-gray-500 text-sm mt-4">该文件已将当前所有规则永久锁定，打开后无需再设置规则</p>
+                <button class="btn btn-primary mt-6" onclick="closeExportModal()">确定</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Student Detail Modal -->
+    <div id="studentModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="text-2xl font-bold" id="studentModalTitle">学生详情</h2>
+                <button onclick="closeStudentModal()" class="modal-close">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+            <div id="studentHistory" class="space-y-3">
+                <!-- Student history will be generated here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification -->
+    <div id="notification" class="notification"></div>
+
+    <script>
+        // ======================== 核心配置 ========================
+        // 锁定的规则（在导出的文件中会被替换为实际设置的规则）
+        const LOCKED_SETTINGS = {
+            isLocked: false, // 是否锁定规则
+            rowRestrictions: [],    // 行限制 [{student: '姓名', row: 0}]
+            adjacentRestrictions: [], // 相邻限制 [{student1: '姓名1', student2: '姓名2'}]
+            frontBackRestrictions: [], // 前后桌限制 [{student1: '姓名1', student2: '姓名2'}]
+            fixedSeats: []          // 固定座位 [{student: '姓名', position: 0}]
+        };
+
+        // 学生名单
+        const students = [
+            '敖寅轩', '包博文', '蔡松阳', '常凯迪', '陈觉熠', '陈俊池', '陈芃锦', '陈俞霖',
+            '杜泓骏', '范邵凯', '冯悠然', '伏俊雯', '高启航', '郭文熙', '何俊杰', '何立林',
+            '何雨桀', '胡家源', '黄戟', '黄文桢', '简文曦', '李广一', '李弘毅', '李芷漩',
+            '梁洪滔', '梁允泽', '刘沛凝', '刘昱同', '龙泳希', '马梓铭', '潘慧妍', '潘丽烨',
+            '乔兰惠', '秦梓航', '冉高越扬', '谭力豪', '谭诗蒙', '田添', '万承源', '汪孝通',
+            '王凡予', '王弘毅', '王一婷', '王云翔', '吴优', '吴臻', '颜屿蘅', '杨皓然',
+            '杨鹏航', '袁伟杰', '张恒烨', '张庭铭', '张元兮', '赵苓淇', '邹谨羽', '邹雨成'
+        ];
+
+        // 全局变量
+        let currentSeats = [];
+        let history = [];
+        let settings = LOCKED_SETTINGS.isLocked ? LOCKED_SETTINGS : {
+            rowRestrictions: [],    
+            adjacentRestrictions: [], 
+            frontBackRestrictions: [], 
+            fixedSeats: []          
+        };
+
+        // 初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeApp();
+            lucide.createIcons();
+            updateCurrentTime();
+            setInterval(updateCurrentTime, 1000);
+        });
+
+        // 初始化应用
+        function initializeApp() {
+            // 如果是锁定版本，禁用设置按钮和导出按钮，不显示任何锁定标记
+            if (LOCKED_SETTINGS.isLocked) {
+                document.getElementById('settingsBtn').disabled = true;
+                document.getElementById('settingsBtn').style.opacity = '0.6';
+                document.getElementById('settingsBtn').title = '当前版本设置不可用';
+                document.getElementById('exportBtn').style.display = 'none';
+            } else {
+                // 非锁定版本，加载本地存储的设置
+                loadSettings();
+            }
+            
+            loadHistory();
+            
+            if (!LOCKED_SETTINGS.isLocked) {
+                populateStudentSelectors();
+                generateFixedSeatGrid();
+                renderRestrictionLists();
+            }
+            
+            generateRandomSeats();
+        }
+
+        // 更新当前时间
+        function updateCurrentTime() {
+            const now = new Date();
+            const timeString = now.toLocaleString('zh-CN', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+            document.getElementById('currentTime').textContent = timeString;
+        }
+
+        // ======================== 规则设置相关功能（仅非锁定版本可用） ========================
+        // 填充学生选择器
+        function populateStudentSelectors() {
+            const selectors = [
+                'rowRestrictionStudent',
+                'adjacentStudent1',
+                'adjacentStudent2',
+                'frontBackStudent1',
+                'frontBackStudent2',
+                'fixedSeatStudent'
+            ];
+
+            selectors.forEach(id => {
+                const select = document.getElementById(id);
+                students.forEach(student => {
+                    const option = document.createElement('option');
+                    option.value = student;
+                    option.textContent = student;
+                    select.appendChild(option);
+                });
+            });
+        }
+
+        // 生成固定座位网格
+        function generateFixedSeatGrid() {
+            const grid = document.getElementById('fixedSeatGrid');
+            grid.innerHTML = '';
+
+            for (let i = 0; i < 56; i++) {
+                const row = Math.floor(i / 8) + 1;
+                const col = (i % 8) + 1;
+                const seat = document.createElement('div');
+                seat.className = 'fixed-seat-item';
+                seat.textContent = `${row}行${col}列`;
+                seat.dataset.position = i;
+                
+                // 检查是否已选中
+                const fixedSeat = settings.fixedSeats.find(f => f.position === i);
+                if (fixedSeat) {
+                    seat.classList.add('active');
+                    seat.textContent = fixedSeat.student;
+                }
+                
+                seat.addEventListener('click', () => selectFixedSeatPosition(i));
+                grid.appendChild(seat);
+            }
+        }
+
+        // 选择固定座位位置
+        function selectFixedSeatPosition(position) {
+            const student = document.getElementById('fixedSeatStudent').value;
+            if (!student) {
+                showNotification('请先选择学生', 'error');
+                return;
+            }
+
+            // 移除该学生已有的固定座位
+            settings.fixedSeats = settings.fixedSeats.filter(f => f.student !== student);
+            
+            // 移除该位置已有的固定座位
+            settings.fixedSeats = settings.fixedSeats.filter(f => f.position !== position);
+            
+            // 添加新的固定座位
+            settings.fixedSeats.push({ student, position });
+            
+            // 更新UI
+            generateFixedSeatGrid();
+            renderRestrictionLists();
+        }
+
+        // 添加行限制
+        function addRowRestriction() {
+            const student = document.getElementById('rowRestrictionStudent').value;
+            const row = parseInt(document.getElementById('rowRestrictionRow').value);
+            
+            if (!student || isNaN(row)) {
+                showNotification('请选择学生和行号', 'error');
+                return;
+            }
+
+            // 移除该学生已有的行限制
+            settings.rowRestrictions = settings.rowRestrictions.filter(r => r.student !== student);
+            
+            // 添加新的行限制
+            settings.rowRestrictions.push({ student, row });
+            
+            // 更新UI
+            renderRestrictionLists();
+            document.getElementById('rowRestrictionStudent').value = '';
+            document.getElementById('rowRestrictionRow').value = '';
+            showNotification('行限制已添加');
+        }
+
+        // 添加相邻限制
+        function addAdjacentRestriction() {
+            const student1 = document.getElementById('adjacentStudent1').value;
+            const student2 = document.getElementById('adjacentStudent2').value;
+            
+            if (!student1 || !student2 || student1 === student2) {
+                showNotification('请选择两个不同的学生', 'error');
+                return;
+            }
+
+            // 检查是否已存在
+            const exists = settings.adjacentRestrictions.some(r => 
+                (r.student1 === student1 && r.student2 === student2) || 
+                (r.student1 === student2 && r.student2 === student1)
+            );
+            
+            if (exists) {
+                showNotification('该限制已存在', 'error');
+                return;
+            }
+
+            // 添加新的相邻限制
+            settings.adjacentRestrictions.push({ student1, student2 });
+            
+            // 更新UI
+            renderRestrictionLists();
+            document.getElementById('adjacentStudent1').value = '';
+            document.getElementById('adjacentStudent2').value = '';
+            showNotification('相邻限制已添加');
+        }
+
+        // 添加前后桌限制
+        function addFrontBackRestriction() {
+            const student1 = document.getElementById('frontBackStudent1').value;
+            const student2 = document.getElementById('frontBackStudent2').value;
+            
+            if (!student1 || !student2 || student1 === student2) {
+                showNotification('请选择两个不同的学生', 'error');
+                return;
+            }
+
+            // 检查是否已存在
+            const exists = settings.frontBackRestrictions.some(r => 
+                (r.student1 === student1 && r.student2 === student2) || 
+                (r.student1 === student2 && r.student2 === student1)
+            );
+            
+            if (exists) {
+                showNotification('该限制已存在', 'error');
+                return;
+            }
+
+            // 添加新的前后桌限制
+            settings.frontBackRestrictions.push({ student1, student2 });
+            
+            // 更新UI
+            renderRestrictionLists();
+            document.getElementById('frontBackStudent1').value = '';
+            document.getElementById('frontBackStudent2').value = '';
+            showNotification('前后桌限制已添加');
+        }
+
+        // 渲染限制列表
+        function renderRestrictionLists() {
+            // 渲染行限制列表
+            const rowList = document.getElementById('rowRestrictionList');
+            if (rowList) {
+                rowList.innerHTML = '';
+                settings.rowRestrictions.forEach((r, index) => {
+                    const item = document.createElement('div');
+                    item.className = 'restriction-item';
+                    item.innerHTML = `
+                        <span>${r.student} 固定在第${r.row + 1}行</span>
+                        <button class="remove-btn" onclick="removeRowRestriction(${index})">删除</button>
+                    `;
+                    rowList.appendChild(item);
+                });
+            }
+
+            // 渲染相邻限制列表
+            const adjacentList = document.getElementById('adjacentRestrictionList');
+            if (adjacentList) {
+                adjacentList.innerHTML = '';
+                settings.adjacentRestrictions.forEach((r, index) => {
+                    const item = document.createElement('div');
+                    item.className = 'restriction-item';
+                    item.innerHTML = `
+                        <span>${r.student1} 和 ${r.student2} 不能左右相邻</span>
+                        <button class="remove-btn" onclick="removeAdjacentRestriction(${index})">删除</button>
+                    `;
+                    adjacentList.appendChild(item);
+                });
+            }
+
+            // 渲染前后桌限制列表
+            const frontBackList = document.getElementById('frontBackRestrictionList');
+            if (frontBackList) {
+                frontBackList.innerHTML = '';
+                settings.frontBackRestrictions.forEach((r, index) => {
+                    const item = document.createElement('div');
+                    item.className = 'restriction-item';
+                    item.innerHTML = `
+                        <span>${r.student1} 和 ${r.student2} 不能前后相邻</span>
+                        <button class="remove-btn" onclick="removeFrontBackRestriction(${index})">删除</button>
+                    `;
+                    frontBackList.appendChild(item);
+                });
+            }
+
+            // 渲染固定座位列表
+            const fixedList = document.getElementById('fixedSeatList');
+            if (fixedList) {
+                fixedList.innerHTML = '';
+                settings.fixedSeats.forEach((r, index) => {
+                    const row = Math.floor(r.position / 8) + 1;
+                    const col = (r.position % 8) + 1;
+                    const item = document.createElement('div');
+                    item.className = 'restriction-item';
+                    item.innerHTML = `
+                        <span>${r.student} 固定在${row}行${col}列</span>
+                        <button class="remove-btn" onclick="removeFixedSeat(${index})">删除</button>
+                    `;
+                    fixedList.appendChild(item);
+                });
+            }
+        }
+
+        // 删除行限制
+        function removeRowRestriction(index) {
+            settings.rowRestrictions.splice(index, 1);
+            renderRestrictionLists();
+            showNotification('行限制已删除');
+        }
+
+        // 删除相邻限制
+        function removeAdjacentRestriction(index) {
+            settings.adjacentRestrictions.splice(index, 1);
+            renderRestrictionLists();
+            showNotification('相邻限制已删除');
+        }
+
+        // 删除前后桌限制
+        function removeFrontBackRestriction(index) {
+            settings.frontBackRestrictions.splice(index, 1);
+            renderRestrictionLists();
+            showNotification('前后桌限制已删除');
+        }
+
+        // 删除固定座位
+        function removeFixedSeat(index) {
+            settings.fixedSeats.splice(index, 1);
+            generateFixedSeatGrid();
+            renderRestrictionLists();
+            showNotification('固定座位已删除');
+        }
+
+        // ======================== 核心功能 ========================
+        // 生成随机座位（核心逻辑）
+        function generateRandomSeats() {
+            // 创建座位数组
+            let newSeats = Array(56).fill(null);
+            
+            // 第一步：放置固定座位
+            settings.fixedSeats.forEach(fixed => {
+                newSeats[fixed.position] = fixed.student;
+            });
+            
+            // 获取剩余需要分配的学生
+            let availableStudents = [...students];
+            settings.fixedSeats.forEach(fixed => {
+                const idx = availableStudents.indexOf(fixed.student);
+                if (idx !== -1) availableStudents.splice(idx, 1);
+            });
+            
+            // 第二步：应用行限制，先放置有行限制的学生
+            settings.rowRestrictions.forEach(restriction => {
+                if (!availableStudents.includes(restriction.student)) return;
+                
+                // 找到该行的空位置
+                const rowStart = restriction.row * 8;
+                const rowEnd = rowStart + 8;
+                const emptyPositions = [];
+                
+                for (let i = rowStart; i < rowEnd; i++) {
+                    if (newSeats[i] === null) {
+                        emptyPositions.push(i);
+                    }
+                }
+                
+                // 随机选择一个位置放置
+                if (emptyPositions.length > 0) {
+                    const randomPos = emptyPositions[Math.floor(Math.random() * emptyPositions.length)];
+                    newSeats[randomPos] = restriction.student;
+                    
+                    // 从可用学生列表中移除
+                    const idx = availableStudents.indexOf(restriction.student);
+                    if (idx !== -1) availableStudents.splice(idx, 1);
+                }
+            });
+            
+            // 第三步：随机分配剩余学生，同时应用相邻和前后桌限制
+            while (availableStudents.length > 0) {
+                // 随机选择一个空位置
+                const emptyPositions = [];
+                for (let i = 0; i < 56; i++) {
+                    if (newSeats[i] === null) emptyPositions.push(i);
+                }
+                
+                if (emptyPositions.length === 0) break;
+                
+                const randomPos = emptyPositions[Math.floor(Math.random() * emptyPositions.length)];
+                let placed = false;
+                
+                // 尝试为该位置找到合适的学生
+                for (let i = 0; i < availableStudents.length; i++) {
+                    const student = availableStudents[i];
+                    
+                    // 检查相邻限制
+                    if (!checkAdjacentRestriction(newSeats, randomPos, student) &&
+                        !checkFrontBackRestriction(newSeats, randomPos, student)) {
+                        
+                        newSeats[randomPos] = student;
+                        availableStudents.splice(i, 1);
+                        placed = true;
+                        break;
+                    }
+                }
+                
+                // 如果没有找到合适的学生，强制放置第一个学生（避免死循环）
+                if (!placed && availableStudents.length > 0) {
+                    newSeats[randomPos] = availableStudents[0];
+                    availableStudents.shift();
+                }
+            }
+            
+            // 更新当前座位并渲染
+            currentSeats = newSeats;
+            renderSeats();
+        }
+
+        // 检查相邻限制
+        function checkAdjacentRestriction(seats, position, student) {
+            // 获取左右邻居
+            const leftPos = position - 1;
+            const rightPos = position + 1;
+            const currentCol = position % 8;
+            
+            // 检查左邻居
+            if (currentCol > 0 && seats[leftPos]) {
+                const neighbor = seats[leftPos];
+                if (settings.adjacentRestrictions.some(r => 
+                    (r.student1 === student && r.student2 === neighbor) || 
+                    (r.student1 === neighbor && r.student2 === student)
+                )) {
+                    return true; // 违反限制
+                }
+            }
+            
+            // 检查右邻居
+            if (currentCol < 7 && seats[rightPos]) {
+                const neighbor = seats[rightPos];
+                if (settings.adjacentRestrictions.some(r => 
+                    (r.student1 === student && r.student2 === neighbor) || 
+                    (r.student1 === neighbor && r.student2 === student)
+                )) {
+                    return true; // 违反限制
+                }
+            }
+            
+            return false; // 符合限制
+        }
+
+        // 检查前后桌限制
+        function checkFrontBackRestriction(seats, position, student) {
+            // 获取前后邻居
+            const frontPos = position - 8;
+            const backPos = position + 8;
+            
+            // 检查前邻居
+            if (frontPos >= 0 && seats[frontPos]) {
+                const neighbor = seats[frontPos];
+                if (settings.frontBackRestrictions.some(r => 
+                    (r.student1 === student && r.student2 === neighbor) || 
+                    (r.student1 === neighbor && r.student2 === student)
+                )) {
+                    return true; // 违反限制
+                }
+            }
+            
+            // 检查后邻居
+            if (backPos < 56 && seats[backPos]) {
+                const neighbor = seats[backPos];
+                if (settings.frontBackRestrictions.some(r => 
+                    (r.student1 === student && r.student2 === neighbor) || 
+                    (r.student1 === neighbor && r.student2 === student)
+                )) {
+                    return true; // 违反限制
+                }
+            }
+            
+            return false; // 符合限制
+        }
+
+        // 渲染座位
+        function renderSeats() {
+            const container = document.getElementById('seatContainer');
+            container.innerHTML = '';
+
+            currentSeats.forEach((student, index) => {
+                const seat = document.createElement('div');
+                seat.className = 'seat';
+                
+                // 标记固定座位
+                if (settings.fixedSeats.some(f => f.position === index)) {
+                    seat.classList.add('fixed-seat');
+                }
+                
+                seat.textContent = student || '';
+                seat.addEventListener('click', () => showStudentHistory(student));
+                container.appendChild(seat);
+            });
+        }
+
+        // 保存当前座位
+        function saveCurrentSeats() {
+            const timestamp = new Date().toISOString();
+            const seatData = {
+                id: Date.now(),
+                timestamp: timestamp,
+                seats: [...currentSeats],
+                settings: JSON.parse(JSON.stringify(settings))
+            };
+
+            history.unshift(seatData);
+            if (history.length > 10) {
+                history = history.slice(0, 10);
+            }
+
+            saveHistory();
+            showNotification('座位表已保存');
+        }
+
+        // ======================== 导出锁定规则的网页 ========================
+        function exportLockedHtml() {
+            if (LOCKED_SETTINGS.isLocked) {
+                showNotification('当前已是锁定版本，无法导出', 'error');
+                return;
+            }
+            
+            // 读取当前HTML内容
+            let htmlContent = document.documentElement.outerHTML;
+            
+            // 创建锁定的设置对象
+            const lockedSettings = {
+                isLocked: true,
+                rowRestrictions: [...settings.rowRestrictions],
+                adjacentRestrictions: [...settings.adjacentRestrictions],
+                frontBackRestrictions: [...settings.frontBackRestrictions],
+                fixedSeats: [...settings.fixedSeats]
+            };
+            
+            // 将LOCKED_SETTINGS替换为实际的锁定设置
+            const lockedSettingsString = JSON.stringify(lockedSettings, null, 4);
+            htmlContent = htmlContent.replace(
+                /const LOCKED_SETTINGS = \{[\s\S]*?\};/,
+                `const LOCKED_SETTINGS = ${lockedSettingsString};`
+            );
+            
+            // 创建Blob并下载
+            const blob = new Blob([htmlContent], { type: 'text/html' });
+            const url = URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `随机座位生成器_规则锁定版_${new Date().getTime()}.html`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            // 显示导出成功弹窗
+            document.getElementById('exportModal').style.display = 'flex';
+            lucide.createIcons();
+        }
+
+        // ======================== 历史记录和弹窗管理 ========================
+        // 显示学生历史记录
+        function showStudentHistory(student) {
+            if (!student) return;
+
+            const modal = document.getElementById('studentModal');
+            const title = document.getElementById('studentModalTitle');
+            const content = document.getElementById('studentHistory');
+
+            title.textContent = `${student} - 历史记录`;
+            content.innerHTML = '';
+
+            // 查找该学生的所有历史记录
+            const studentHistory = [];
+            history.forEach(record => {
+                const seatIndex = record.seats.indexOf(student);
+                if (seatIndex !== -1) {
+                    studentHistory.push({
+                        timestamp: record.timestamp,
+                        seatPosition: seatIndex + 1,
+                        row: Math.floor(seatIndex / 8) + 1,
+                        col: (seatIndex % 8) + 1
+                    });
+                }
+            });
+
+            if (studentHistory.length === 0) {
+                content.innerHTML = '<p class="text-gray-500">暂无历史记录</p>';
+            } else {
+                studentHistory.forEach(record => {
+                    const item = document.createElement('div');
+                    item.className = 'history-item';
+                    item.innerHTML = `
+                        <div class="font-semibold">${new Date(record.timestamp).toLocaleString('zh-CN')}</div>
+                        <div class="text-gray-600">位置: ${record.seatPosition} (第${record.row}行第${record.col}列)</div>
+                    `;
+                    content.appendChild(item);
+                });
+            }
+
+            modal.style.display = 'flex';
+        }
+
+        // 关闭学生详情弹窗
+        function closeStudentModal() {
+            document.getElementById('studentModal').style.display = 'none';
+        }
+
+        // 显示历史记录弹窗
+        function showHistoryModal() {
+            const modal = document.getElementById('historyModal');
+            const list = document.getElementById('historyList');
+            list.innerHTML = '';
+
+            if (history.length === 0) {
+                list.innerHTML = '<p class="text-gray-500">暂无历史记录</p>';
+            } else {
+                history.forEach(record => {
+                    const item = document.createElement('div');
+                    item.className = 'history-item';
+                    item.innerHTML = `
+                        <div class="font-semibold">${new Date(record.timestamp).toLocaleString('zh-CN')}</div>
+                        <div class="text-gray-600">座位表 #${record.id}</div>
+                    `;
+                    item.addEventListener('click', () => loadHistoryRecord(record));
+                    list.appendChild(item);
+                });
+            }
+
+            modal.style.display = 'flex';
+        }
+
+        // 关闭历史记录弹窗
+        function closeHistoryModal() {
+            document.getElementById('historyModal').style.display = 'none';
+        }
+
+        // 加载历史记录
+        function loadHistoryRecord(record) {
+            currentSeats = [...record.seats];
+            if (!LOCKED_SETTINGS.isLocked) {
+                settings = JSON.parse(JSON.stringify(record.settings));
+                renderRestrictionLists();
+                generateFixedSeatGrid();
+            }
+            renderSeats();
+            closeHistoryModal();
+            showNotification('已加载历史座位表');
+        }
+
+        // 显示设置弹窗
+        function showSettingsModal() {
+            if (LOCKED_SETTINGS.isLocked) {
+                showNotification('设置功能不可用', 'error');
+                return;
+            }
+            
+            document.getElementById('settingsModal').style.display = 'flex';
+            document.getElementById('passwordPrompt').style.display = 'block';
+            document.getElementById('settingsContent').style.display = 'none';
+            document.getElementById('passwordInput').value = '';
+        }
+
+        // 关闭设置弹窗
+        function closeSettingsModal() {
+            document.getElementById('settingsModal').style.display = 'none';
+        }
+
+        // 关闭导出成功弹窗
+        function closeExportModal() {
+            document.getElementById('exportModal').style.display = 'none';
+        }
+
+        // 检查密码
+        function checkPassword() {
+            const password = document.getElementById('passwordInput').value;
+            if (password === 'passwordtest') {
+                document.getElementById('passwordPrompt').style.display = 'none';
+                document.getElementById('settingsContent').style.display = 'block';
+            } else {
+                showNotification('密码错误', 'error');
+            }
+        }
+
+        // 保存所有设置
+        function saveAllSettings() {
+            saveSettings();
+            closeSettingsModal();
+            generateRandomSeats();
+            showNotification('所有设置已保存并生效');
+        }
+
+        // ======================== 本地存储 ========================
+        // 保存设置到本地存储
+        function saveSettings() {
+            if (!LOCKED_SETTINGS.isLocked) {
+                localStorage.setItem('seatGeneratorSettings', JSON.stringify(settings));
+            }
+        }
+
+        // 从本地存储加载设置
+        function loadSettings() {
+            const saved = localStorage.getItem('seatGeneratorSettings');
+            if (saved) {
+                settings = JSON.parse(saved);
+            }
+        }
+
+        // 保存历史记录到本地存储
+        function saveHistory() {
+            localStorage.setItem('seatGeneratorHistory', JSON.stringify(history));
+        }
+
+        // 从本地存储加载历史记录
+        function loadHistory() {
+            const saved = localStorage.getItem('seatGeneratorHistory');
+            if (saved) {
+                history = JSON.parse(saved);
+            }
+        }
+
+        // 显示通知
+        function showNotification(message, type = 'success') {
+            const notification = document.getElementById('notification');
+            notification.textContent = message;
+            notification.className = `notification ${type}`;
+            notification.classList.add('show');
+            
+            setTimeout(() => {
+                notification.classList.remove('show');
+            }, 3000);
+        }
+
+        // ======================== 事件监听 ========================
+        // 绑定按钮事件
+        document.addEventListener('DOMContentLoaded', function() {
+            if (document.getElementById('generateBtn')) {
+                document.getElementById('generateBtn').addEventListener('click', generateRandomSeats);
+            }
+            if (document.getElementById('saveBtn')) {
+                document.getElementById('saveBtn').addEventListener('click', saveCurrentSeats);
+            }
+            if (document.getElementById('historyBtn')) {
+                document.getElementById('historyBtn').addEventListener('click', showHistoryModal);
+            }
+            if (document.getElementById('settingsBtn')) {
+                document.getElementById('settingsBtn').addEventListener('click', showSettingsModal);
+            }
+            if (document.getElementById('exportBtn')) {
+                document.getElementById('exportBtn').addEventListener('click', exportLockedHtml);
+            }
+
+            // 点击弹窗外区域关闭弹窗
+            window.addEventListener('click', function(event) {
+                const modals = ['historyModal', 'settingsModal', 'studentModal', 'exportModal'];
+                modals.forEach(modalId => {
+                    const modal = document.getElementById(modalId);
+                    if (modal && event.target === modal) {
+                        modal.style.display = 'none';
+                    }
+                });
+            });
+
+            // 键盘快捷键
+            document.addEventListener('keydown', function(event) {
+                if (event.ctrlKey || event.metaKey) {
+                    switch (event.key) {
+                        case 'g':
+                            event.preventDefault();
+                            generateRandomSeats();
+                            break;
+                        case 's':
+                            event.preventDefault();
+                            saveCurrentSeats();
+                            break;
+                        case 'h':
+                            event.preventDefault();
+                            showHistoryModal();
+                            break;
+                    }
+                }
+                
+                if (event.key === 'Escape') {
+                    closeHistoryModal();
+                    closeSettingsModal();
+                    closeStudentModal();
+                    closeExportModal();
+                }
+            });
+        });
+    </script>
+</body>
+</html>
